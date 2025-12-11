@@ -1,0 +1,338 @@
+package main
+
+import (
+	_ "embed"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"strings"
+	"text/template"
+
+	// TODO: get rid of any external imports
+	"github.com/iancoleman/strcase"
+)
+
+//go:embed constructor.go.tpl
+var constructorFileTpl string
+
+var constructorFileTemplate = template.Must(template.New("constructor").Parse(constructorFileTpl))
+
+type constructorCriteria struct {
+	FileName        string
+	PackageName     string
+	StructName      string
+	ConstructorName string
+	IsPointer       bool
+	Fields          []fieldInfo
+	Imports         []importInfo
+}
+
+type fieldInfo struct {
+	Name    string
+	Type    string
+	ArgName string
+}
+
+type importInfo struct {
+	Name string
+	Path string
+}
+
+func main() {
+	workingDirectory := os.Getenv("PWD")
+	sourceFileName := os.Getenv("GOFILE")
+	fmt.Printf("Generating constructors from source file: %s\n", filepath.Join(workingDirectory, sourceFileName))
+
+	sourceFile, err := parser.ParseFile(token.NewFileSet(), sourceFileName, nil, parser.ParseComments)
+	if err != nil {
+		fmt.Printf("Failed to parse source file: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Parsing struct declarations AST")
+
+	criterias := make([]constructorCriteria, 0)
+	allImports := parseImports(sourceFile)
+
+	ast.Inspect(sourceFile, func(node ast.Node) bool {
+		switch node := node.(type) {
+		case *ast.GenDecl:
+			if node.Tok != token.TYPE {
+				return true
+			}
+
+			for _, spec := range node.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+
+				structType, ok := typeSpec.Type.(*ast.StructType)
+				if !ok {
+					continue
+				}
+
+				// Check for constructor annotations in comments
+				var isValueConstructor, isPointerConstructor bool
+				if node.Doc != nil {
+					for _, comment := range node.Doc.List {
+						text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
+						if strings.Contains(text, "@ValueConstructor") {
+							isValueConstructor = true
+						}
+						if strings.Contains(text, "@PointerConstructor") {
+							isPointerConstructor = true
+						}
+					}
+				}
+
+				if !isValueConstructor && !isPointerConstructor {
+					continue
+				}
+
+				// Parse struct fields
+				fields := parseStructFields(structType, sourceFile)
+
+				if isValueConstructor {
+					imports := filterUsedImportsForFields(fields, allImports)
+					criterias = append(criterias, constructorCriteria{
+						FileName:        sourceFileName,
+						PackageName:     sourceFile.Name.Name,
+						StructName:      typeSpec.Name.Name,
+						ConstructorName: "New" + typeSpec.Name.Name,
+						IsPointer:       false,
+						Fields:          fields,
+						Imports:         imports,
+					})
+				}
+
+				if isPointerConstructor {
+					imports := filterUsedImportsForFields(fields, allImports)
+					criterias = append(criterias, constructorCriteria{
+						FileName:        sourceFileName,
+						PackageName:     sourceFile.Name.Name,
+						StructName:      typeSpec.Name.Name,
+						ConstructorName: "New" + typeSpec.Name.Name + "Ptr",
+						IsPointer:       true,
+						Fields:          fields,
+						Imports:         imports,
+					})
+				}
+			}
+		}
+		return true
+	})
+
+	fmt.Printf("Successfully parsed struct declarations in AST. Constructors count: %d\n", len(criterias))
+
+	if len(criterias) == 0 {
+		fmt.Println("No constructors to generate")
+		return
+	}
+
+	fmt.Println("Creating constructor files")
+
+	for _, criteria := range criterias {
+		err = createConstructorFileFromCriteria(criteria)
+		if err != nil {
+			fmt.Printf("Failed to create constructor file for struct %s: %v\n", criteria.StructName, err)
+			os.Exit(1)
+		}
+	}
+
+	fmt.Println("Successfully created constructor files")
+}
+
+// filterUsedImportsForFields returns only imports that are used in the specific struct fields
+func filterUsedImportsForFields(fields []fieldInfo, allImports []importInfo) []importInfo {
+	usedImports := make(map[string]importInfo)
+
+	// Create a map for quick lookup of imports by name
+	importsByName := make(map[string]importInfo)
+	for _, imp := range allImports {
+		importsByName[imp.Name] = imp
+	}
+
+	// Check each field type for used imports
+	for _, field := range fields {
+		used := findUsedImportsInType(field.Type, importsByName)
+		for name, imp := range used {
+			usedImports[name] = imp
+		}
+	}
+
+	// Convert map back to slice
+	var result []importInfo
+	for _, imp := range usedImports {
+		result = append(result, imp)
+	}
+
+	fmt.Printf("  Filtered imports for struct: %d used out of %d total\n", len(result), len(allImports))
+	return result
+}
+
+// findUsedImportsInType recursively checks a type string for used imports
+func findUsedImportsInType(typeStr string, importsByName map[string]importInfo) map[string]importInfo {
+	used := make(map[string]importInfo)
+
+	// Simple check: if the type contains "importName." then that import is used
+	for importName, imp := range importsByName {
+		if strings.Contains(typeStr, importName+".") {
+			used[importName] = imp
+		}
+	}
+
+	return used
+}
+
+func parseImports(file *ast.File) []importInfo {
+	var imports []importInfo
+
+	for _, imp := range file.Imports {
+		importPath := strings.Trim(imp.Path.Value, `"`)
+
+		var importName string
+		if imp.Name != nil {
+			importName = imp.Name.Name
+		} else {
+			// Extract the last part of the path as the default name
+			parts := strings.Split(importPath, "/")
+			importName = parts[len(parts)-1]
+		}
+
+		imports = append(imports, importInfo{
+			Name: importName,
+			Path: importPath,
+		})
+	}
+
+	return imports
+}
+
+func parseStructFields(structType *ast.StructType, file *ast.File) []fieldInfo {
+	var fields []fieldInfo
+
+	for _, field := range structType.Fields.List {
+		// Skip fields without names (embedded fields)
+		if len(field.Names) == 0 {
+			continue
+		}
+
+		for _, name := range field.Names {
+			if !ast.IsExported(name.Name) {
+				continue
+			}
+
+			typeString := getTypeString(field.Type, file)
+			argName := strcase.ToLowerCamel(name.Name)
+
+			fields = append(fields, fieldInfo{
+				Name:    name.Name,
+				Type:    typeString,
+				ArgName: argName,
+			})
+		}
+	}
+
+	return fields
+}
+
+func getTypeString(expr ast.Expr, file *ast.File) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.SelectorExpr:
+		pkg := getTypeString(t.X, file)
+		return pkg + "." + t.Sel.Name
+	case *ast.StarExpr:
+		return "*" + getTypeString(t.X, file)
+	case *ast.ArrayType:
+		if t.Len == nil {
+			return "[]" + getTypeString(t.Elt, file)
+		}
+		return "[" + getTypeString(t.Len, file) + "]" + getTypeString(t.Elt, file)
+	case *ast.MapType:
+		return "map[" + getTypeString(t.Key, file) + "]" + getTypeString(t.Value, file)
+	case *ast.InterfaceType:
+		return "interface{}"
+	case *ast.StructType:
+		return "struct{}"
+	case *ast.ChanType:
+		dir := ""
+		switch t.Dir {
+		case ast.SEND:
+			dir = "chan<- "
+		case ast.RECV:
+			dir = "<-chan "
+		default:
+			dir = "chan "
+		}
+		return dir + getTypeString(t.Value, file)
+	case *ast.FuncType:
+		return "func" + getFuncTypeString(t)
+	default:
+		return "unknown"
+	}
+}
+
+func getFuncTypeString(funcType *ast.FuncType) string {
+	var params, results []string
+
+	if funcType.Params != nil {
+		for _, param := range funcType.Params.List {
+			typeStr := getTypeString(param.Type, nil)
+			if len(param.Names) > 0 {
+				for range param.Names {
+					params = append(params, typeStr)
+				}
+			} else {
+				params = append(params, typeStr)
+			}
+		}
+	}
+
+	if funcType.Results != nil {
+		for _, result := range funcType.Results.List {
+			typeStr := getTypeString(result.Type, nil)
+			if len(result.Names) > 0 {
+				for range result.Names {
+					results = append(results, typeStr)
+				}
+			} else {
+				results = append(results, typeStr)
+			}
+		}
+	}
+
+	result := "(" + strings.Join(params, ", ") + ")"
+	if len(results) > 0 {
+		if len(results) == 1 {
+			result += " " + results[0]
+		} else {
+			result += " (" + strings.Join(results, ", ") + ")"
+		}
+	}
+
+	return result
+}
+
+func createConstructorFileFromCriteria(criteria constructorCriteria) error {
+	fileName := fmt.Sprintf("new_%s.gen.go", strcase.ToSnake(criteria.StructName))
+
+	file, err := os.Create(fileName)
+	if err != nil {
+		return fmt.Errorf("creating file: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	err = constructorFileTemplate.Execute(file, criteria)
+	if err != nil {
+		return fmt.Errorf("executing template: %w", err)
+	}
+
+	fmt.Printf("Created constructor file: %s (imports: %d)\n", fileName, len(criteria.Imports))
+	return nil
+}
