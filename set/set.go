@@ -2,11 +2,11 @@ package set
 
 type T[K comparable] map[K]struct{}
 
-func NewSet[K comparable]() T[K] {
+func New[K comparable]() T[K] {
 	return make(T[K])
 }
 
-func SetFromSlice[K comparable](items []K) T[K] {
+func FromSlice[K comparable](items []K) T[K] {
 	s := make(T[K])
 	for _, item := range items {
 		s.Add(item)

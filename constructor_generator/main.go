@@ -8,17 +8,21 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
-	// TODO: get rid of any external imports
-	"github.com/iancoleman/strcase"
+	"github.com/leshless/golibrary/stringcase"
 )
 
 //go:embed constructor.go.tpl
-var constructorFileTpl string
+var constructorFile string
+var constructorFileTemplate = template.Must(template.New("constructor").Parse(constructorFile))
 
-var constructorFileTemplate = template.Must(template.New("constructor").Parse(constructorFileTpl))
+var (
+	valueInstanceRegexp   = regexp.MustCompile("@[a-zA-Z]*ValueInstance")
+	pointerInstanceRegexp = regexp.MustCompile("@[a-zA-Z]*PointerInstance")
+)
 
 type constructorCriteria struct {
 	FileName        string
@@ -76,28 +80,30 @@ func main() {
 				}
 
 				// Check for constructor annotations in comments
-				var isValueConstructor, isPointerConstructor bool
+				var (
+					shouldOmitt     bool
+					isValueInstance bool
+				)
 				if node.Doc != nil {
 					for _, comment := range node.Doc.List {
 						text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
-						if strings.Contains(text, "@ValueConstructor") {
-							isValueConstructor = true
-						}
-						if strings.Contains(text, "@PointerConstructor") {
-							isPointerConstructor = true
+
+						if valueInstanceRegexp.Match([]byte(text)) {
+							isValueInstance = true
+						} else if !pointerInstanceRegexp.Match([]byte(text)) {
+							shouldOmitt = true
 						}
 					}
 				}
 
-				if !isValueConstructor && !isPointerConstructor {
+				if shouldOmitt {
 					continue
 				}
 
-				// Parse struct fields
 				fields := parseStructFields(structType, sourceFile)
+				imports := filterUsedImportsForFields(fields, allImports)
 
-				if isValueConstructor {
-					imports := filterUsedImportsForFields(fields, allImports)
+				if isValueInstance {
 					criterias = append(criterias, constructorCriteria{
 						FileName:        sourceFileName,
 						PackageName:     sourceFile.Name.Name,
@@ -107,15 +113,12 @@ func main() {
 						Fields:          fields,
 						Imports:         imports,
 					})
-				}
-
-				if isPointerConstructor {
-					imports := filterUsedImportsForFields(fields, allImports)
+				} else {
 					criterias = append(criterias, constructorCriteria{
 						FileName:        sourceFileName,
 						PackageName:     sourceFile.Name.Name,
 						StructName:      typeSpec.Name.Name,
-						ConstructorName: "New" + typeSpec.Name.Name + "Ptr",
+						ConstructorName: "New" + typeSpec.Name.Name,
 						IsPointer:       true,
 						Fields:          fields,
 						Imports:         imports,
@@ -170,7 +173,7 @@ func filterUsedImportsForFields(fields []fieldInfo, allImports []importInfo) []i
 		result = append(result, imp)
 	}
 
-	fmt.Printf("  Filtered imports for struct: %d used out of %d total\n", len(result), len(allImports))
+	fmt.Printf("Filtered imports for struct: %d used out of %d total\n", len(result), len(allImports))
 	return result
 }
 
@@ -222,12 +225,8 @@ func parseStructFields(structType *ast.StructType, file *ast.File) []fieldInfo {
 		}
 
 		for _, name := range field.Names {
-			if !ast.IsExported(name.Name) {
-				continue
-			}
-
 			typeString := getTypeString(field.Type, file)
-			argName := strcase.ToLowerCamel(name.Name)
+			argName := stringcase.LowerCamel(name.Name)
 
 			fields = append(fields, fieldInfo{
 				Name:    name.Name,
@@ -320,7 +319,7 @@ func getFuncTypeString(funcType *ast.FuncType) string {
 }
 
 func createConstructorFileFromCriteria(criteria constructorCriteria) error {
-	fileName := fmt.Sprintf("new_%s.gen.go", strcase.ToSnake(criteria.StructName))
+	fileName := fmt.Sprintf("new_%s.gen.go", stringcase.LowerSnake(criteria.StructName))
 
 	file, err := os.Create(fileName)
 	if err != nil {

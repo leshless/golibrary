@@ -1,7 +1,9 @@
-package set
+package sets
 
-func Union[K comparable](a, b T[K]) T[K] {
-	result := New[K]()
+import "github.com/leshless/golibrary/set"
+
+func Union[K comparable](a, b set.T[K]) set.T[K] {
+	result := set.New[K]()
 	for item := range a {
 		result.Add(item)
 	}
@@ -12,8 +14,8 @@ func Union[K comparable](a, b T[K]) T[K] {
 	return result
 }
 
-func Intersection[K comparable](a, b T[K]) T[K] {
-	result := New[K]()
+func Intersection[K comparable](a, b set.T[K]) set.T[K] {
+	result := set.New[K]()
 	for item := range a {
 		if b.Contains(item) {
 			result.Add(item)
@@ -23,8 +25,8 @@ func Intersection[K comparable](a, b T[K]) T[K] {
 	return result
 }
 
-func Diff[K comparable](a, b T[K]) T[K] {
-	result := New[K]()
+func Diff[K comparable](a, b set.T[K]) set.T[K] {
+	result := set.New[K]()
 	for item := range a {
 		if !b.Contains(item) {
 			result.Add(item)
@@ -33,8 +35,8 @@ func Diff[K comparable](a, b T[K]) T[K] {
 	return result
 }
 
-func SymDiff[K comparable](a, b T[K]) T[K] {
-	result := New[K]()
+func SymDiff[K comparable](a, b set.T[K]) set.T[K] {
+	result := set.New[K]()
 	for item := range a {
 		if !b.Contains(item) {
 			result.Add(item)
@@ -49,7 +51,7 @@ func SymDiff[K comparable](a, b T[K]) T[K] {
 	return result
 }
 
-func IsSubset[K comparable](subset, set T[K]) bool {
+func IsSubset[K comparable](subset, set set.T[K]) bool {
 	for item := range subset {
 		if !set.Contains(item) {
 			return false
