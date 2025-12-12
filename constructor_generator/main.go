@@ -81,33 +81,35 @@ func main() {
 					continue
 				}
 
+				if node.Doc == nil {
+					continue
+				}
+
+				if len(node.Doc.List) == 0 {
+					continue
+				}
+
 				// Check for constructor annotations in comments
 				var (
 					shouldOmitt      bool
 					isValueInstance  bool
 					isPublicInstance bool
 				)
-				if node.Doc != nil {
-					if len(node.Doc.List) == 0 {
-						continue
+				for _, comment := range node.Doc.List {
+					text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
+
+					if valueInstanceRegexp.Match([]byte(text)) {
+						isValueInstance = true
+					} else if !pointerInstanceRegexp.Match([]byte(text)) {
+						shouldOmitt = true
+						break
 					}
 
-					for _, comment := range node.Doc.List {
-						text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
-
-						if valueInstanceRegexp.Match([]byte(text)) {
-							isValueInstance = true
-						} else if !pointerInstanceRegexp.Match([]byte(text)) {
-							shouldOmitt = true
-							break
-						}
-
-						if publicInstanceRegexp.Match([]byte(text)) {
-							isPublicInstance = true
-						} else if !privateInstanceRegexp.Match([]byte(text)) {
-							shouldOmitt = true
-							break
-						}
+					if publicInstanceRegexp.Match([]byte(text)) {
+						isPublicInstance = true
+					} else if !privateInstanceRegexp.Match([]byte(text)) {
+						shouldOmitt = true
+						break
 					}
 				}
 
