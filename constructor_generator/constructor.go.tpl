@@ -18,8 +18,8 @@ func {{.ConstructorName}}(
 	{{- range $index, $field := .Fields}}
 	{{$field.ArgName}} {{$field.Type}},
 	{{- end}}
-) {{if .IsPointer}}*{{end}}{{.StructName}} {
-	return {{if .IsPointer}}&{{end}}{{.StructName}}{
+) {{if not .IsValueInstance}}*{{end}}{{.StructName}} {
+	return {{if not .IsValueInstance}}&{{end}}{{.StructName}}{
 		{{- range $field := .Fields}}
 		{{$field.Name}}: {{$field.ArgName}},
 		{{- end}}

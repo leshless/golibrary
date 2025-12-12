@@ -22,6 +22,8 @@ var constructorFileTemplate = template.Must(template.New("constructor").Parse(co
 var (
 	valueInstanceRegexp   = regexp.MustCompile("@[a-zA-Z]*ValueInstance")
 	pointerInstanceRegexp = regexp.MustCompile("@[a-zA-Z]*PointerInstance")
+	publicInstanceRegexp  = regexp.MustCompile("@Public[a-zA-Z]*Instance")
+	privateInstanceRegexp = regexp.MustCompile("@Private[a-zA-Z]*Instance")
 )
 
 type constructorCriteria struct {
@@ -29,7 +31,7 @@ type constructorCriteria struct {
 	PackageName     string
 	StructName      string
 	ConstructorName string
-	IsPointer       bool
+	IsValueInstance bool
 	Fields          []fieldInfo
 	Imports         []importInfo
 }
@@ -81,8 +83,9 @@ func main() {
 
 				// Check for constructor annotations in comments
 				var (
-					shouldOmitt     bool
-					isValueInstance bool
+					shouldOmitt      bool
+					isValueInstance  bool
+					isPublicInstance bool
 				)
 				if node.Doc != nil {
 					for _, comment := range node.Doc.List {
@@ -92,6 +95,14 @@ func main() {
 							isValueInstance = true
 						} else if !pointerInstanceRegexp.Match([]byte(text)) {
 							shouldOmitt = true
+							break
+						}
+
+						if publicInstanceRegexp.Match([]byte(text)) {
+							isPublicInstance = true
+						} else if !privateInstanceRegexp.Match([]byte(text)) {
+							shouldOmitt = true
+							break
 						}
 					}
 				}
@@ -103,27 +114,22 @@ func main() {
 				fields := parseStructFields(structType, sourceFile)
 				imports := filterUsedImportsForFields(fields, allImports)
 
-				if isValueInstance {
-					criterias = append(criterias, constructorCriteria{
-						FileName:        sourceFileName,
-						PackageName:     sourceFile.Name.Name,
-						StructName:      typeSpec.Name.Name,
-						ConstructorName: "New" + typeSpec.Name.Name,
-						IsPointer:       false,
-						Fields:          fields,
-						Imports:         imports,
-					})
+				var constructorName string
+				if isPublicInstance {
+					constructorName = "New" + stringcase.UpperCamel(typeSpec.Name.Name)
 				} else {
-					criterias = append(criterias, constructorCriteria{
-						FileName:        sourceFileName,
-						PackageName:     sourceFile.Name.Name,
-						StructName:      typeSpec.Name.Name,
-						ConstructorName: "New" + typeSpec.Name.Name,
-						IsPointer:       true,
-						Fields:          fields,
-						Imports:         imports,
-					})
+					constructorName = "new" + stringcase.UpperCamel(typeSpec.Name.Name)
 				}
+
+				criterias = append(criterias, constructorCriteria{
+					FileName:        sourceFileName,
+					PackageName:     sourceFile.Name.Name,
+					StructName:      typeSpec.Name.Name,
+					ConstructorName: constructorName,
+					IsValueInstance: isValueInstance,
+					Fields:          fields,
+					Imports:         imports,
+				})
 			}
 		}
 		return true
