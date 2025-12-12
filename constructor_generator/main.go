@@ -88,6 +88,10 @@ func main() {
 					isPublicInstance bool
 				)
 				if node.Doc != nil {
+					if len(node.Doc.List) == 0 {
+						continue
+					}
+
 					for _, comment := range node.Doc.List {
 						text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
 
