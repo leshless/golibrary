@@ -88,7 +88,7 @@ func split(runes []rune) []word {
 			continue
 		}
 
-		if i != 0 && isUpper(runes[i-1]) && i != len(runes)-1 && isUpper(runes[i+1]) {
+		if (i != 0 && isUpper(runes[i-1])) || i == len(runes)-1 || isUpper(runes[i+1]) {
 			isShorthand = true
 		}
 

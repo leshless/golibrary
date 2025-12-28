@@ -7,7 +7,6 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"text/template"
@@ -48,17 +47,13 @@ type importInfo struct {
 }
 
 func main() {
-	workingDirectory := os.Getenv("PWD")
 	sourceFileName := os.Getenv("GOFILE")
-	fmt.Printf("Generating constructors from source file: %s\n", filepath.Join(workingDirectory, sourceFileName))
 
 	sourceFile, err := parser.ParseFile(token.NewFileSet(), sourceFileName, nil, parser.ParseComments)
 	if err != nil {
 		fmt.Printf("Failed to parse source file: %v\n", err)
 		os.Exit(1)
 	}
-
-	fmt.Println("Parsing struct declarations AST")
 
 	criterias := make([]constructorCriteria, 0)
 	allImports := parseImports(sourceFile)
@@ -139,14 +134,9 @@ func main() {
 		return true
 	})
 
-	fmt.Printf("Successfully parsed struct declarations in AST. Constructors count: %d\n", len(criterias))
-
 	if len(criterias) == 0 {
-		fmt.Println("No constructors to generate")
 		return
 	}
-
-	fmt.Println("Creating constructor files")
 
 	for _, criteria := range criterias {
 		err = createConstructorFileFromCriteria(criteria)
@@ -155,8 +145,6 @@ func main() {
 			os.Exit(1)
 		}
 	}
-
-	fmt.Println("Successfully created constructor files")
 }
 
 // filterUsedImportsForFields returns only imports that are used in the specific struct fields
@@ -342,6 +330,5 @@ func createConstructorFileFromCriteria(criteria constructorCriteria) error {
 		return fmt.Errorf("executing template: %w", err)
 	}
 
-	fmt.Printf("Created constructor file: %s (imports: %d)\n", fileName, len(criteria.Imports))
 	return nil
 }
