@@ -117,7 +117,7 @@ func main() {
 					continue
 				}
 
-				fields := parseStructFields(structType, sourceFile)
+				fields := parseStructFields(structType)
 				imports := filterUsedImportsForFields(fields, allImports)
 
 				usedImports = sets.Union(usedImports, set.FromSlice(imports))
@@ -223,23 +223,35 @@ func parseImports(file *ast.File) []importCriteria {
 	return imports
 }
 
-func parseStructFields(structType *ast.StructType, file *ast.File) []fieldCriteria {
+func parseStructFields(structType *ast.StructType) []fieldCriteria {
 	var fields []fieldCriteria
 
 	for _, field := range structType.Fields.List {
-		// Skip fields without names (embedded fields)
 		if len(field.Names) == 0 {
-			continue
+			typeString := getTypeString(field.Type)
+			typeStringPath := strings.Split(typeString, ".")
+
+			var name string
+			if len(typeStringPath) == 2 {
+				name = typeStringPath[1]
+			} else {
+				name = typeStringPath[0]
+			}
+
+			fields = append(fields, fieldCriteria{
+				Name:    name,
+				Type:    typeString,
+				ArgName: stringcase.LowerCamel(name),
+			})
 		}
 
 		for _, name := range field.Names {
-			typeString := getTypeString(field.Type, file)
-			argName := stringcase.LowerCamel(name.Name)
+			typeString := getTypeString(field.Type)
 
 			fields = append(fields, fieldCriteria{
 				Name:    name.Name,
 				Type:    typeString,
-				ArgName: argName,
+				ArgName: stringcase.LowerCamel(name.Name),
 			})
 		}
 	}
@@ -247,22 +259,22 @@ func parseStructFields(structType *ast.StructType, file *ast.File) []fieldCriter
 	return fields
 }
 
-func getTypeString(expr ast.Expr, file *ast.File) string {
+func getTypeString(expr ast.Expr) string {
 	switch t := expr.(type) {
 	case *ast.Ident:
 		return t.Name
 	case *ast.SelectorExpr:
-		pkg := getTypeString(t.X, file)
+		pkg := getTypeString(t.X)
 		return pkg + "." + t.Sel.Name
 	case *ast.StarExpr:
-		return "*" + getTypeString(t.X, file)
+		return "*" + getTypeString(t.X)
 	case *ast.ArrayType:
 		if t.Len == nil {
-			return "[]" + getTypeString(t.Elt, file)
+			return "[]" + getTypeString(t.Elt)
 		}
-		return "[" + getTypeString(t.Len, file) + "]" + getTypeString(t.Elt, file)
+		return "[" + getTypeString(t.Len) + "]" + getTypeString(t.Elt)
 	case *ast.MapType:
-		return "map[" + getTypeString(t.Key, file) + "]" + getTypeString(t.Value, file)
+		return "map[" + getTypeString(t.Key) + "]" + getTypeString(t.Value)
 	case *ast.InterfaceType:
 		return "interface{}"
 	case *ast.StructType:
@@ -277,7 +289,7 @@ func getTypeString(expr ast.Expr, file *ast.File) string {
 		default:
 			dir = "chan "
 		}
-		return dir + getTypeString(t.Value, file)
+		return dir + getTypeString(t.Value)
 	case *ast.FuncType:
 		return "func" + getFuncTypeString(t)
 	default:
@@ -290,7 +302,7 @@ func getFuncTypeString(funcType *ast.FuncType) string {
 
 	if funcType.Params != nil {
 		for _, param := range funcType.Params.List {
-			typeStr := getTypeString(param.Type, nil)
+			typeStr := getTypeString(param.Type)
 			if len(param.Names) > 0 {
 				for range param.Names {
 					params = append(params, typeStr)
@@ -303,7 +315,7 @@ func getFuncTypeString(funcType *ast.FuncType) string {
 
 	if funcType.Results != nil {
 		for _, result := range funcType.Results.List {
-			typeStr := getTypeString(result.Type, nil)
+			typeStr := getTypeString(result.Type)
 			if len(result.Names) > 0 {
 				for range result.Names {
 					results = append(results, typeStr)
