@@ -16,12 +16,16 @@ func TestLowerCamel(t *testing.T) {
 			"helloMyNameIsArtem",
 		},
 		{
-			"BTRFS Is a cool file system",
-			"btrfsIsACoolFileSystem",
+			"BTRFS Is a modern file system",
+			"btrfsIsAModernFileSystem",
 		},
 		{
 			"Zooweemama",
 			"zooweemama",
+		},
+		{
+			"EntityID",
+			"entityID",
 		},
 	}
 
@@ -46,8 +50,8 @@ func TestUpperCamel(t *testing.T) {
 			"HelloMyNameIsArtem",
 		},
 		{
-			"BTRFS Is a cool file system",
-			"BTRFSIsACoolFileSystem",
+			"BTRFS Is a modern file system",
+			"BTRFSIsAModernFileSystem",
 		},
 		{
 			"Zooweemama",
@@ -56,6 +60,10 @@ func TestUpperCamel(t *testing.T) {
 		{
 			"Powerman6000",
 			"Powerman6000",
+		},
+		{
+			"entity ID",
+			"EntityID",
 		},
 	}
 
@@ -80,8 +88,8 @@ func TestLowerSnake(t *testing.T) {
 			"hello_my_name_is_artem",
 		},
 		{
-			"BTRFS Is a cool file system",
-			"btrfs_is_a_cool_file_system",
+			"BTRFS Is a modern file system",
+			"btrfs_is_a_modern_file_system",
 		},
 		{
 			"Zooweemama",
@@ -90,6 +98,10 @@ func TestLowerSnake(t *testing.T) {
 		{
 			"Powerman6000",
 			"powerman6000",
+		},
+		{
+			"entity ID",
+			"entity_id",
 		},
 	}
 

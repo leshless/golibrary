@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-
-	"github.com/leshless/golibrary/chans"
 )
 
 type Registrator interface {
@@ -56,18 +54,11 @@ func (m *manager) Terminate(ctx context.Context) error {
 		return errors.New("already terminated")
 	}
 
-	var terminate func(ctx context.Context) error
-	if m.config.enableTerminateParallel {
-		terminate = m.terminateParallel
-	} else {
-		terminate = m.terminateSequentially
-	}
-
 	ctx, cancel := context.WithTimeout(ctx, m.config.terminateTotalTimeout)
 	errCh := make(chan error)
 
 	go func() {
-		errCh <- terminate(ctx)
+		errCh <- m.terminateSequentially(ctx)
 	}()
 
 	m.isTerminated.Store(true)
@@ -80,36 +71,6 @@ func (m *manager) Terminate(ctx context.Context) error {
 		cancel()
 		return ctx.Err()
 	}
-}
-
-func (m *manager) terminateParallel(ctx context.Context) error {
-	errCh := make(chan error, len(m.actions))
-	var wg sync.WaitGroup
-
-	for _, action := range m.actions {
-		wg.Go(func() {
-			defer wg.Done()
-
-			defer func() {
-				if r := recover(); r != nil {
-					errCh <- fmt.Errorf("panic: %v", r)
-				}
-			}()
-
-			ctx, cancel := context.WithTimeout(ctx, m.config.terminateActionTimeout)
-			defer cancel()
-
-			errCh <- action(ctx)
-		})
-	}
-
-	wg.Wait()
-	close(errCh)
-
-	errs := chans.ReadAll(errCh)
-	err := errors.Join(errs...)
-
-	return err
 }
 
 func (m *manager) terminateSequentially(ctx context.Context) error {

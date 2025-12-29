@@ -1,6 +1,7 @@
-package interrupter
+package interrupt
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,19 +12,17 @@ func InitInterrupter() Interrupter {
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 
 	interrupter := &interrupter{}
+	ctx, cancel := context.WithCancel(context.Background())
+	interrupter.ctx = ctx
 
 	go func() {
 		<-signalCh
+		close(signalCh)
 
-		interrupter.isInterrupted.Store(true)
+		interrupter.mu.Lock()
+		defer interrupter.mu.Unlock()
 
-		interrupter.mu.RLock()
-		defer interrupter.mu.RUnlock()
-
-		for _, ch := range interrupter.chs {
-			ch <- struct{}{}
-			close(ch)
-		}
+		cancel()
 	}()
 
 	return interrupter
