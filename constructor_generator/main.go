@@ -11,6 +11,8 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/leshless/golibrary/set"
+	"github.com/leshless/golibrary/sets"
 	"github.com/leshless/golibrary/stringcase"
 )
 
@@ -25,25 +27,29 @@ var (
 	privateInstanceRegexp = regexp.MustCompile("@Private[a-zA-Z]*Instance")
 )
 
-type constructorCriteria struct {
-	FileName        string
-	PackageName     string
-	StructName      string
-	ConstructorName string
-	IsValueInstance bool
-	Fields          []fieldInfo
-	Imports         []importInfo
+type importCriteria struct {
+	Name string
+	Path string
 }
 
-type fieldInfo struct {
+type fieldCriteria struct {
 	Name    string
 	Type    string
 	ArgName string
 }
 
-type importInfo struct {
-	Name string
-	Path string
+type constructorCriteria struct {
+	StructName      string
+	ConstructorName string
+	IsValueInstance bool
+	Fields          []fieldCriteria
+}
+
+type fileCriteria struct {
+	FileName     string
+	PackageName  string
+	Imports      []importCriteria
+	Constructors []constructorCriteria
 }
 
 func main() {
@@ -57,6 +63,7 @@ func main() {
 
 	criterias := make([]constructorCriteria, 0)
 	allImports := parseImports(sourceFile)
+	usedImports := set.New[importCriteria]()
 
 	ast.Inspect(sourceFile, func(node ast.Node) bool {
 		switch node := node.(type) {
@@ -113,6 +120,8 @@ func main() {
 				fields := parseStructFields(structType, sourceFile)
 				imports := filterUsedImportsForFields(fields, allImports)
 
+				usedImports = sets.Union(usedImports, set.FromSlice(imports))
+
 				var constructorName string
 				if isPublicInstance {
 					constructorName = "New" + stringcase.UpperCamel(typeSpec.Name.Name)
@@ -121,13 +130,10 @@ func main() {
 				}
 
 				criterias = append(criterias, constructorCriteria{
-					FileName:        sourceFileName,
-					PackageName:     sourceFile.Name.Name,
 					StructName:      typeSpec.Name.Name,
 					ConstructorName: constructorName,
 					IsValueInstance: isValueInstance,
 					Fields:          fields,
-					Imports:         imports,
 				})
 			}
 		}
@@ -138,21 +144,26 @@ func main() {
 		return
 	}
 
-	for _, criteria := range criterias {
-		err = createConstructorFileFromCriteria(criteria)
-		if err != nil {
-			fmt.Printf("Failed to create constructor file for struct %s: %v\n", criteria.StructName, err)
-			os.Exit(1)
-		}
+	criteria := fileCriteria{
+		FileName:     strings.Split(sourceFileName, ".")[0],
+		PackageName:  sourceFile.Name.Name,
+		Imports:      usedImports.Slice(),
+		Constructors: criterias,
+	}
+
+	err = createConstructorFileFromCriteria(criteria)
+	if err != nil {
+		fmt.Printf("Failed to create constructor file: %s\n", err.Error())
+		os.Exit(1)
 	}
 }
 
 // filterUsedImportsForFields returns only imports that are used in the specific struct fields
-func filterUsedImportsForFields(fields []fieldInfo, allImports []importInfo) []importInfo {
-	usedImports := make(map[string]importInfo)
+func filterUsedImportsForFields(fields []fieldCriteria, allImports []importCriteria) []importCriteria {
+	usedImports := make(map[string]importCriteria)
 
 	// Create a map for quick lookup of imports by name
-	importsByName := make(map[string]importInfo)
+	importsByName := make(map[string]importCriteria)
 	for _, imp := range allImports {
 		importsByName[imp.Name] = imp
 	}
@@ -166,18 +177,17 @@ func filterUsedImportsForFields(fields []fieldInfo, allImports []importInfo) []i
 	}
 
 	// Convert map back to slice
-	var result []importInfo
+	var result []importCriteria
 	for _, imp := range usedImports {
 		result = append(result, imp)
 	}
 
-	fmt.Printf("Filtered imports for struct: %d used out of %d total\n", len(result), len(allImports))
 	return result
 }
 
 // findUsedImportsInType recursively checks a type string for used imports
-func findUsedImportsInType(typeStr string, importsByName map[string]importInfo) map[string]importInfo {
-	used := make(map[string]importInfo)
+func findUsedImportsInType(typeStr string, importsByName map[string]importCriteria) map[string]importCriteria {
+	used := make(map[string]importCriteria)
 
 	// Simple check: if the type contains "importName." then that import is used
 	for importName, imp := range importsByName {
@@ -189,8 +199,8 @@ func findUsedImportsInType(typeStr string, importsByName map[string]importInfo) 
 	return used
 }
 
-func parseImports(file *ast.File) []importInfo {
-	var imports []importInfo
+func parseImports(file *ast.File) []importCriteria {
+	var imports []importCriteria
 
 	for _, imp := range file.Imports {
 		importPath := strings.Trim(imp.Path.Value, `"`)
@@ -204,7 +214,7 @@ func parseImports(file *ast.File) []importInfo {
 			importName = parts[len(parts)-1]
 		}
 
-		imports = append(imports, importInfo{
+		imports = append(imports, importCriteria{
 			Name: importName,
 			Path: importPath,
 		})
@@ -213,8 +223,8 @@ func parseImports(file *ast.File) []importInfo {
 	return imports
 }
 
-func parseStructFields(structType *ast.StructType, file *ast.File) []fieldInfo {
-	var fields []fieldInfo
+func parseStructFields(structType *ast.StructType, file *ast.File) []fieldCriteria {
+	var fields []fieldCriteria
 
 	for _, field := range structType.Fields.List {
 		// Skip fields without names (embedded fields)
@@ -226,7 +236,7 @@ func parseStructFields(structType *ast.StructType, file *ast.File) []fieldInfo {
 			typeString := getTypeString(field.Type, file)
 			argName := stringcase.LowerCamel(name.Name)
 
-			fields = append(fields, fieldInfo{
+			fields = append(fields, fieldCriteria{
 				Name:    name.Name,
 				Type:    typeString,
 				ArgName: argName,
@@ -316,8 +326,8 @@ func getFuncTypeString(funcType *ast.FuncType) string {
 	return result
 }
 
-func createConstructorFileFromCriteria(criteria constructorCriteria) error {
-	fileName := fmt.Sprintf("new_%s.gen.go", stringcase.LowerSnake(criteria.StructName))
+func createConstructorFileFromCriteria(criteria fileCriteria) error {
+	fileName := fmt.Sprintf("%s_constructors.gen.go", stringcase.LowerSnake(criteria.FileName))
 
 	file, err := os.Create(fileName)
 	if err != nil {

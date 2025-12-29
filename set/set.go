@@ -27,3 +27,12 @@ func (s T[K]) Contains(item K) bool {
 	_, exists := s[item]
 	return exists
 }
+
+func (s T[K]) Slice() []K {
+	keys := make([]K, 0, len(s))
+	for k := range s {
+		keys = append(keys, k)
+	}
+
+	return keys
+}
