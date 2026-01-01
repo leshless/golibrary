@@ -1,0 +1,26 @@
+{
+    "ignore_dir_patterns": [
+        ".git",
+        ".vscode",
+        ".idea"
+    ],
+    "ignore_file_patterns": [
+        ".gitignore",
+        "*.gen.go",
+        "*.pb.go",
+        "main.go",
+        "go.mod",
+        "go.sum",
+        "LICENSE",
+        "README.md",
+        "Dockerfile",
+        "Makefile"
+    ],
+    "generators": [
+        {
+            "name": "constructor",
+            "file_pattern": "*.go",
+            "command": "go run github.com/leshless/golibrary/constructor_generator"
+        }
+    ]
+}

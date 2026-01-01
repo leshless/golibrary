@@ -13,3 +13,8 @@ func ReadAll[A any](ch <-chan A) []A {
 
 	return as
 }
+
+// @PrivatePointerInstance
+type struct1 struct {
+	jopa int
+}
