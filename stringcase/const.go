@@ -1,5 +1,13 @@
 package stringcase
 
+type caseStyle uint8
+
+const (
+	caseStyleLower caseStyle = iota
+	caseStyleUpper
+	caseStyleTitle
+)
+
 const (
 	latinLowerMin rune = 'a'
 	latinLowerMax rune = 'z'

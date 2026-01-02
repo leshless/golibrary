@@ -115,3 +115,41 @@ func TestLowerSnake(t *testing.T) {
 		})
 	}
 }
+
+func TestUpperSnake(t *testing.T) {
+	testCases := []struct {
+		input  string
+		output string
+	}{
+		{
+			"hello_my_name_is_artem",
+			"HELLO_MY_NAME_IS_ARTEM",
+		},
+		{
+			"BTRFS Is a modern file system",
+			"BTRFS_IS_A_MODERN_FILE_SYSTEM",
+		},
+		{
+			"Zooweemama",
+			"ZOOWEEMAMA",
+		},
+		{
+			"Powerman6000",
+			"POWERMAN6000",
+		},
+		{
+			"entity ID",
+			"ENTITY_ID",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.input, func(t *testing.T) {
+			result := stringcase.UpperSnake(testCase.input)
+			if result != testCase.output {
+				t.Logf("expected: %s, got: %s", testCase.output, result)
+				t.Fail()
+			}
+		})
+	}
+}

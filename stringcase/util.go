@@ -17,7 +17,7 @@ func (w word) toLower() []rune {
 	return w.runes
 }
 
-func (w word) toUpper() []rune {
+func (w word) toTitle() []rune {
 	if w.isShorthand {
 		return xslices.Map(w.runes, toUpper)
 	}
@@ -27,6 +27,10 @@ func (w word) toUpper() []rune {
 	runes[0] = toUpper(runes[0])
 
 	return runes
+}
+
+func (w word) toUpper() []rune {
+	return xslices.Map(w.runes, toUpper)
 }
 
 func isLower(char rune) bool {
@@ -107,13 +111,18 @@ func split(runes []rune) []word {
 	return words
 }
 
-func casify(text string, separator string, isUpper bool) string {
+func casify(text string, separator string, caseStyle caseStyle) string {
 	runes := []rune(text)
 	words := split(runes)
 
 	return strings.Join(xslices.Map(words, func(w word) string {
-		if isUpper {
+		switch caseStyle {
+		case caseStyleLower:
+			return string(w.toLower())
+		case caseStyleUpper:
 			return string(w.toUpper())
+		case caseStyleTitle:
+			return string(w.toTitle())
 		}
 
 		return string(w.toLower())
