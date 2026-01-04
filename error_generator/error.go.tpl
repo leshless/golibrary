@@ -12,6 +12,9 @@ import (
 	"fmt"
 )
 
+// Dummy
+var _ fmt.Scanner
+
 {{range .Errors -}}
 // {{.ConstructorName}} creates new {{.TypeName}} error
 func {{.ConstructorName}}(
