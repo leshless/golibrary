@@ -17,9 +17,9 @@ import (
 )
 
 type generator struct {
-	Name        string `json:"name"`
-	FilePattern string `json:"file_pattern"`
-	Command     string `json:"command"`
+	Name         string   `json:"name"`
+	FilePatterns []string `json:"file_pattern"`
+	Command      string   `json:"command"`
 }
 
 type config struct {
@@ -108,15 +108,14 @@ func main() {
 	// Check if config file was changed
 	configChanged := true
 	configHash := sha256.Sum256(configData)
-	configPath := filepath.Join(workDir, configFileName)
 
-	if oldConfigHash, ok := cache[configPath]; ok {
+	if oldConfigHash, ok := cache[configFileName]; ok {
 		if configHash == oldConfigHash {
 			configChanged = false
 		}
 	}
 
-	cache[configPath] = configHash
+	cache[configFileName] = configHash
 
 	// Collect files whose content was changed and update cache
 	filteredFilePaths := make([]string, 0, len(filePaths))
@@ -128,15 +127,20 @@ func main() {
 		}
 
 		fileHash := sha256.Sum256(data)
+		fileRelativePath, err := filepath.Rel(workDir, filePath)
+		if err != nil {
+			fmt.Printf("Failed to evaluate relative file path: %s", err)
+			os.Exit(1)
+		}
 
-		if oldFileHash, ok := cache[filePath]; ok {
+		if oldFileHash, ok := cache[fileRelativePath]; ok {
 			if fileHash == oldFileHash {
 				continue
 			}
 		}
 
 		filteredFilePaths = append(filteredFilePaths, filePath)
-		cache[filePath] = fileHash
+		cache[fileRelativePath] = fileHash
 	}
 
 	// TODO: Maybe erase files which no longer match the patterns from cache?
@@ -149,13 +153,21 @@ func main() {
 	// Run generators for files
 	for _, generator := range config.Generators {
 		for _, filePath := range filePaths {
-			ok, err := filepath.Match(generator.FilePattern, filepath.Base(filePath))
-			if err != nil {
-				fmt.Printf("Malformed generator file pattern \"%s\"\n", generator.FilePattern)
-				os.Exit(1)
+			skip := true
+			for _, filePattern := range generator.FilePatterns {
+				ok, err := filepath.Match(filePattern, filepath.Base(filePath))
+				if err != nil {
+					fmt.Printf("Malformed generator file pattern \"%s\"\n", filePattern)
+					os.Exit(1)
+				}
+
+				if ok {
+					skip = false
+					break
+				}
 			}
 
-			if !ok {
+			if skip {
 				continue
 			}
 
