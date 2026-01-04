@@ -44,7 +44,7 @@ func SymDiff[K comparable](a, b set.T[K]) set.T[K] {
 	}
 	for item := range b {
 		if !a.Contains(item) {
-			a.Add(item)
+			result.Add(item)
 		}
 	}
 
