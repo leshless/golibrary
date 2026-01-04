@@ -18,7 +18,7 @@ import (
 
 type generator struct {
 	Name         string   `json:"name"`
-	FilePatterns []string `json:"file_pattern"`
+	FilePatterns []string `json:"file_patterns"`
 	Command      string   `json:"command"`
 }
 
