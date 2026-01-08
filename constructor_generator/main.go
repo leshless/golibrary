@@ -238,7 +238,7 @@ func parseStructFields(structType *ast.StructType) []fieldCriteria {
 			if len(typeStringPath) == 2 {
 				name = typeStringPath[1]
 			} else {
-				name = typeStringPath[0]
+				name = strings.TrimPrefix(typeStringPath[0], "*")
 			}
 
 			fields = append(fields, fieldCriteria{
