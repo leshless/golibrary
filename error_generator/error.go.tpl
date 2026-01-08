@@ -21,7 +21,7 @@ func {{.ConstructorName}}(
 	{{- range $i, $field := .Fields}}
 	{{$field.ArgName}} {{$field.Type}},
 	{{- end}}
-) error {
+) Error {
 	return {{.TypeName}}{
 		{{- range .Fields}}
 		{{.Name}}: {{.ArgName}},
