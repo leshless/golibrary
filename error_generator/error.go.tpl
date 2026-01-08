@@ -56,12 +56,8 @@ func (e {{.TypeName}}) Message() string {
 }
 
 // Code returns error code
-func (e {{.TypeName}}) Code() Code {
-	{{- if .CodeValue}}
+func (e {{.TypeName}}) Code() ErrorCode {
 	return {{.CodeValue}}
-	{{- else}}
-	return "UNKNOWN_ERROR"
-	{{- end}}
 }
 
 // Unwrap returns underlying errors
