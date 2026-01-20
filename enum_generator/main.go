@@ -119,27 +119,31 @@ func main() {
 
 func getConstants(file *ast.File, typeName string) []ConstantCriteria {
 	constants := make([]ConstantCriteria, 0)
-
 	ast.Inspect(file, func(n ast.Node) bool {
 		genDecl, ok := n.(*ast.GenDecl)
 		if !ok || genDecl.Tok != token.CONST {
 			return true
 		}
 
-		for _, spec := range genDecl.Specs {
+		for i, spec := range genDecl.Specs {
 			valueSpec, ok := spec.(*ast.ValueSpec)
-			if !ok || valueSpec.Type == nil {
+			if !ok {
 				continue
+			}
+
+			if i == 0 && valueSpec.Type == nil {
+				break
 			}
 
 			ident, ok := valueSpec.Type.(*ast.Ident)
-			if !ok || ident.Name != typeName {
-				continue
+			if ok {
+				if ident.Name != typeName {
+					break
+				}
 			}
 
 			for _, name := range valueSpec.Names {
-				cleanName := strings.TrimPrefix(name.Name, typeName)
-				stringValue := stringcase.UpperSnake(cleanName)
+				stringValue := stringcase.UpperSnake(strings.TrimPrefix(name.Name, typeName))
 
 				constants = append(constants, ConstantCriteria{
 					Name:        name.Name,
