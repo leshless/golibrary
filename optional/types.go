@@ -1,6 +1,6 @@
 package optional
 
-type String T[string]
+type String = T[string]
 
 func SomeString(value string) T[string] {
 	return T[string]{
@@ -24,7 +24,7 @@ func StringFromPointer(pointer *string) T[string] {
 	}
 }
 
-type Int T[int]
+type Int = T[int]
 
 func SomeInt(value int) T[int] {
 	return T[int]{
