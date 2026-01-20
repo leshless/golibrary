@@ -259,10 +259,10 @@ func parseStructFields(structType *ast.StructType) []fieldCriteria {
 		}
 	}
 
-	// Handle field names that collide with go keywords
+	// Handle field arg names that collide with go keywords
 	for i, field := range fields {
-		if field.Name == "status" {
-			fields[i].Name = "status_"
+		if field.ArgName == "status" {
+			fields[i].ArgName = "status_"
 		}
 	}
 
