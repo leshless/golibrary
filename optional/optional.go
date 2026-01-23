@@ -16,7 +16,7 @@ type T[V any] struct {
 
 var _ fmt.Stringer = (*T[struct{}])(nil)
 var _ json.Unmarshaler = (*T[struct{}])(nil)
-var _ json.Marshaler = (*T[struct{}])(nil)
+var _ json.Marshaler = T[struct{}]{}
 
 func Some[V any](value V) T[V] {
 	return T[V]{
@@ -75,7 +75,7 @@ func (t *T[V]) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &t.value)
 }
 
-func (t *T[V]) MarshalJSON() ([]byte, error) {
+func (t T[V]) MarshalJSON() ([]byte, error) {
 	if !t.isNotNull {
 		return []byte("null"), nil
 	}
