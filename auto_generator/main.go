@@ -171,7 +171,7 @@ func main() {
 				continue
 			}
 
-			runGenerator(filePath, generator)
+			runGenerator(filePath, generator, workDir)
 		}
 	}
 
@@ -258,9 +258,13 @@ func writeCache(cache map[string][32]byte) {
 	}
 }
 
-func runGenerator(filePath string, generator generator) {
+func runGenerator(filePath string, generator generator, workDir string) {
 	cmd := exec.Command("sh", "-c", generator.Command)
-	cmd.Env = append(os.Environ(), "GOFILE="+filePath)
+	cmd.Env = append(
+		os.Environ(),
+		"GOFILE="+filePath,
+		"PROJECT_ROOT"+workDir,
+	)
 	cmd.Dir = filepath.Dir(filePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
