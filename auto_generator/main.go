@@ -263,7 +263,7 @@ func runGenerator(filePath string, generator generator, workDir string) {
 	cmd.Env = append(
 		os.Environ(),
 		"GOFILE="+filePath,
-		"PROJECT_ROOT"+workDir,
+		"PROJECT_ROOT="+workDir,
 	)
 	cmd.Dir = filepath.Dir(filePath)
 	cmd.Stdout = os.Stdout
