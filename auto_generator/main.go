@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/leshless/golibrary/xslices"
 )
@@ -35,13 +36,12 @@ const (
 	exampleConfigFilePath = libraryPath + "/config_example.json"
 )
 
-// TODO: add source files caching
 func main() {
 	workDir := os.Getenv("PWD")
 
 	// Read config and cache
 	config, configData := readConfig()
-	cache := readCache()
+	oldCache := readCache()
 
 	// Ensure we are not calling ourselves
 	config.Generators = xslices.Filter(config.Generators, func(generator generator) bool {
@@ -105,16 +105,10 @@ func main() {
 		return nil
 	})
 
-	// Check if config file was changed
-	configChanged := true
+	cache := make(map[string][32]byte)
+
+	// Add config file to the cache
 	configHash := sha256.Sum256(configData)
-
-	if oldConfigHash, ok := cache[configFileName]; ok {
-		if configHash == oldConfigHash {
-			configChanged = false
-		}
-	}
-
 	cache[configFileName] = configHash
 
 	// Collect files whose content was changed and update cache
@@ -133,6 +127,8 @@ func main() {
 			os.Exit(1)
 		}
 
+		cache[fileRelativePath] = fileHash
+
 		if oldFileHash, ok := cache[fileRelativePath]; ok {
 			if fileHash == oldFileHash {
 				continue
@@ -140,15 +136,14 @@ func main() {
 		}
 
 		filteredFilePaths = append(filteredFilePaths, filePath)
-		cache[fileRelativePath] = fileHash
 	}
-
-	// TODO: Maybe erase files which no longer match the patterns from cache?
 
 	// If config was changed, run genetors for every file, even if its content is old
-	if !configChanged {
+	if oldCache[configFileName] == cache[configFileName] {
 		filePaths = filteredFilePaths
 	}
+
+	var wg sync.WaitGroup
 
 	// Run generators for files
 	for _, generator := range config.Generators {
@@ -171,9 +166,13 @@ func main() {
 				continue
 			}
 
-			runGenerator(filePath, generator, workDir)
+			wg.Go(func() {
+				runGenerator(filePath, generator, workDir)
+			})
 		}
 	}
+
+	wg.Wait()
 
 	// Update cache
 	writeCache(cache)
@@ -263,7 +262,7 @@ func runGenerator(filePath string, generator generator, workDir string) {
 	cmd.Env = append(
 		os.Environ(),
 		"GOFILE="+filePath,
-		"PROJECT_ROOT"+workDir,
+		"PROJECT_ROOT="+workDir,
 	)
 	cmd.Dir = filepath.Dir(filePath)
 	cmd.Stdout = os.Stdout
