@@ -129,7 +129,7 @@ func main() {
 
 		cache[fileRelativePath] = fileHash
 
-		if oldFileHash, ok := cache[fileRelativePath]; ok {
+		if oldFileHash, ok := oldCache[fileRelativePath]; ok {
 			if fileHash == oldFileHash {
 				continue
 			}
